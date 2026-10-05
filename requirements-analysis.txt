@@ -1,0 +1,13 @@
+# Extra dependencies for the analysis notebooks under output/analysis/.
+# These are NOT needed to train or to run on the HPC; they are kept out of the
+# core requirements.txt / constraints.txt so the training and cluster installs
+# stay lean. Install them only when you want to run the notebooks:
+#
+#     .venv.nosync/bin/python -m pip install -c constraints.txt -r requirements-analysis.txt
+#
+# The -c constraints.txt keeps the shared pins (numpy 1.26.4 etc.) fixed while
+# adding the notebook tools on top.
+
+matplotlib==3.9.4
+jupytext==1.16.4
+ipykernel==6.29.5

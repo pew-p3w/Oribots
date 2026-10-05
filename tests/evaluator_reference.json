@@ -1,0 +1,127 @@
+{
+  "_source": {
+    "captured_from": "an earlier implementation of the evaluator",
+    "note": "Reference values for src/evaluator.py. Regenerate only after an intentional scoring change has been reviewed."
+  },
+  "sample_index_to_time": {
+    "index=0,n=1": 0.0,
+    "index=0,n=10": 0.0,
+    "index=5,n=10": 11.111111111111,
+    "index=9,n=10": 20.0
+  },
+  "settings": {
+    "config_values": {
+      "BALL_RADIUS": 0.3,
+      "BALL_REACHED_DISTANCE": 0.33,
+      "FITNESS_ALIGNMENT_WEIGHT": 0.05,
+      "FITNESS_PROGRESS_WEIGHT": 1.0,
+      "FITNESS_REACHED_BONUS_WEIGHT": 0.2,
+      "FITNESS_TIME_TO_REACH_WEIGHT": 0.1,
+      "NO_PROGRESS_EPSILON": 1e-06,
+      "NO_PROGRESS_PENALTY": 0.01,
+      "SIMULATION_TIME": 20.0
+    },
+    "decimals": 12,
+    "sampling_frequency": 5.0,
+    "simulation_time": 20.0
+  },
+  "signed_distance_progress": {
+    "0.0->0.0": 0.0,
+    "10.0->0.0": 1.0,
+    "10.0->10.0": -0.01,
+    "10.0->15.0": -0.5,
+    "10.0->20.0": -1.0,
+    "10.0->5.0": 0.5,
+    "5.0->5.0": -0.01
+  },
+  "trials": {
+    "approaches_without_reaching": {
+      "closest_distance": 3.2,
+      "final_distance": 3.2,
+      "initial_distance": 8.0,
+      "movement_alignment": 1.0,
+      "progress_from_closest": 0.6,
+      "progress_from_final": 0.6,
+      "reached_bonus": 0.0,
+      "time_to_reach_bonus": 0.0,
+      "trial_fitness": 0.65
+    },
+    "closes_then_drifts_away": {
+      "closest_distance": 1.0,
+      "final_distance": 4.5,
+      "initial_distance": 5.0,
+      "movement_alignment": 0.0,
+      "progress_from_closest": 0.8,
+      "progress_from_final": 0.1,
+      "reached_bonus": 0.0,
+      "time_to_reach_bonus": 0.0,
+      "trial_fitness": 0.8
+    },
+    "moves_away": {
+      "closest_distance": 5.0,
+      "final_distance": 8.0,
+      "initial_distance": 5.0,
+      "movement_alignment": -1.0,
+      "progress_from_closest": -0.01,
+      "progress_from_final": -0.6,
+      "reached_bonus": 0.0,
+      "time_to_reach_bonus": 0.0,
+      "trial_fitness": -0.06
+    },
+    "reaches_ball_early": {
+      "closest_distance": 0.0,
+      "final_distance": 0.0,
+      "initial_distance": 5.0,
+      "movement_alignment": 1.0,
+      "progress_from_closest": 1.0,
+      "progress_from_final": 1.0,
+      "reached_bonus": 1.0,
+      "time_to_reach_bonus": 0.99,
+      "trial_fitness": 1.349
+    },
+    "reaches_ball_late": {
+      "closest_distance": 0.0,
+      "final_distance": 0.0,
+      "initial_distance": 5.0,
+      "movement_alignment": 1.0,
+      "progress_from_closest": 1.0,
+      "progress_from_final": 1.0,
+      "reached_bonus": 1.0,
+      "time_to_reach_bonus": 0.95,
+      "trial_fitness": 1.345
+    },
+    "reaches_then_ball_knocked_away": {
+      "closest_distance": 0.1,
+      "final_distance": 3.8,
+      "initial_distance": 5.0,
+      "movement_alignment": 1.0,
+      "progress_from_closest": 0.98,
+      "progress_from_final": 0.24,
+      "reached_bonus": 1.0,
+      "time_to_reach_bonus": 0.97,
+      "trial_fitness": 1.327
+    },
+    "sideways": {
+      "closest_distance": 5.0,
+      "final_distance": 5.830951894845,
+      "initial_distance": 5.0,
+      "movement_alignment": -0.189168937164,
+      "progress_from_closest": -0.01,
+      "progress_from_final": -0.166190378969,
+      "reached_bonus": 0.0,
+      "time_to_reach_bonus": 0.0,
+      "trial_fitness": -0.019458446858
+    },
+    "stationary": {
+      "closest_distance": 5.0,
+      "final_distance": 5.0,
+      "initial_distance": 5.0,
+      "movement_alignment": 0.0,
+      "progress_from_closest": -0.01,
+      "progress_from_final": -0.01,
+      "reached_bonus": 0.0,
+      "time_to_reach_bonus": 0.0,
+      "trial_fitness": -0.01
+    }
+  }
+}

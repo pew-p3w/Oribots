@@ -1,0 +1,35 @@
+# Training outputs (the run folders themselves) are kept out of git.
+output/*
+!output/.gitkeep
+# ...but the analysis code that reads those runs IS tracked. Its own outputs
+# (rendered figures, exported tables) stay ignored.
+!output/analysis/
+output/analysis/figures/
+output/analysis/*.csv
+
+# Slurm logs
+jobs/logs/*
+!jobs/logs/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+.venv.nosync/
+.conda/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# MuJoCo crash log
+MUJOCO_LOG.TXT

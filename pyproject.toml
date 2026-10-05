@@ -1,0 +1,11 @@
+# Project metadata and interpreter pin only. Oribots is run from a checkout
+# (`python run.py ...`), not installed as a package. Dependencies live in
+# requirements.txt; the vendored Revolve2 packages in engine/ have their own
+# pyproject.toml files and are installed by `make setup`.
+
+[project]
+name = "oribots"
+version = "0.1.0"
+description = "Evolving modular-robot controllers that walk to a ball, in MuJoCo."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"

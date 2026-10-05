@@ -1,0 +1,76 @@
+#!/bin/bash
+# Resume an Oribots run on CHPC Lengau (PBS Pro), inside Singularity.
+#
+# A 96 h wall rarely finishes a long run, so this job finds the latest snapshot
+# in a run folder itself and continues from it. Submit from the repository root:
+#
+#     qsub -v OUTPUT=output/spider_8ball_cmaes_1234 hpc/pbs/resume.pbs
+#
+# Chain several of these in sequence (each picks up where the last stopped).
+# `run.py -c` continues the exact optimizer/EA state stored in the snapshot and
+# trims any half-written recording rows past the resume point, so a resume never
+# duplicates or drops generations. OUTPUT is required; there is no default,
+# because resuming into the wrong folder is the mistake most worth preventing.
+#
+# Requires: the SIF image on lustre (hpc/build_sif.sh) and a lustre checkout.
+#
+# The project (-P), email (-M) and log paths (-o/-e) in the #PBS lines below are
+# placeholders. Replace them with your own before submitting (and set PROJECT
+# in tests/test_pbs.py to match): the scheduler reads
+# those lines itself, so shell variables such as $USER do not work there, and the
+# log folder must already exist.
+
+#PBS -N oribots_resume
+#PBS -P <PROJECT>
+#PBS -q smp
+#PBS -l select=1:ncpus=24
+#PBS -l walltime=96:00:00
+#PBS -m abe
+#PBS -M you@example.org
+#PBS -o /mnt/lustre/users/<user>/oribots_logs/resume.out
+#PBS -e /mnt/lustre/users/<user>/oribots_logs/resume.err
+
+set -euo pipefail
+ulimit -s unlimited
+
+cd "$PBS_O_WORKDIR"
+
+if [ -z "${OUTPUT:-}" ]; then
+    echo "OUTPUT is required: qsub -v OUTPUT=output/<run folder> hpc/pbs/resume.pbs" >&2
+    exit 1
+fi
+if [ ! -d "$OUTPUT" ]; then
+    echo "Run folder not found: $OUTPUT (cwd $(pwd))" >&2
+    exit 1
+fi
+
+# Find the highest-numbered gen<N>.pkl in the folder. Numeric sort on the digits
+# after "gen" so gen9 < gen10 < gen100 (a plain glob sort would order them wrong).
+latest=""
+latest_gen=-1
+for snapshot in "$OUTPUT"/gen*.pkl; do
+    [ -e "$snapshot" ] || continue
+    base="$(basename "$snapshot" .pkl)"      # gen<N>
+    num="${base#gen}"                         # <N>
+    case "$num" in
+        ''|*[!0-9]*) continue ;;              # skip anything not a plain number
+    esac
+    if [ "$num" -gt "$latest_gen" ]; then
+        latest_gen="$num"
+        latest="$snapshot"
+    fi
+done
+
+if [ -z "$latest" ]; then
+    echo "No gen*.pkl snapshots to resume from in $OUTPUT" >&2
+    exit 1
+fi
+
+source hpc/pbs/_run_in_container.sh
+
+echo "Host: $(hostname)"
+echo "Job ID: ${PBS_JOBID:-unset}"
+echo "NCPUS: ${NCPUS:-unset}"
+echo "Resuming: $latest (generation $latest_gen)"
+
+run_in_container python run.py -c "$latest"

@@ -1,0 +1,57 @@
+# Full transitive dependency lock for Oribots.
+#
+# requirements.txt pins only the direct dependencies; this file pins the
+# complete resolved set (direct + transitive), so a fresh install on a laptop
+# and a later install on the HPC resolve to the same versions instead of the
+# same direct pins over drifting transitives.
+#
+# Usage (the constraint applies to whatever pip resolves; it does not itself
+# install anything):
+#
+#     pip install -c constraints.txt -r requirements.txt
+#
+# Generated with `pip freeze --exclude-editable` from a verified .venv.nosync,
+# deliberately excluding the six editable revolve2-* engine packages so no
+# absolute `-e /.../engine/...` paths are committed (that would break on the HPC
+# and make the checkout non-relocatable). Regenerate the
+# same way from a known-good environment if the pinned set needs to change.
+#
+# Captured on macOS arm64, Python 3.11.15. A wheel occasionally differs between
+# macOS arm64 and HPC x86_64; if the HPC install ever conflicts, regenerate this
+# file there (or maintain a per-platform constraints file) - the Docker Linux
+# gate is where such a divergence would first surface.
+
+absl-py==2.5.0
+attrs==26.1.0
+certifi==2026.7.22
+charset-normalizer==3.5.1
+cma==4.4.4
+dm-control==1.0.14
+dm-env==1.6
+dm-tree==0.1.10
+etils==1.14.0
+fsspec==2026.9.0
+glfw==2.10.0
+idna==3.20
+ImageIO==2.37.4
+labmaze==1.0.6
+lxml==6.1.3
+mujoco==3.10.0
+mujoco-python-viewer==0.1.4
+multipledispatch==1.0.0
+noise==1.2.2
+numpy==1.26.4
+opencv-python-headless==4.11.0.86
+pillow==12.3.0
+protobuf==7.36.2
+PyOpenGL==3.1.10
+pyparsing==3.3.3
+pyrr==0.10.3
+PyYAML==6.0.3
+requests==2.34.2
+scipy==1.17.1
+tqdm==4.70.1
+typing_extensions==4.16.0
+urllib3==2.8.0
+wrapt==2.4.1
+zipp==4.1.0

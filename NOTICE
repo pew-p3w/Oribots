@@ -1,0 +1,27 @@
+Oribots
+========
+
+Copyright (C) the Oribots authors.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License version 3, as published by
+the Free Software Foundation. See the top-level LICENSE file for the full text.
+
+
+Third-party code
+----------------
+
+The `engine/` directory is NOT part of Oribots' own code. It is a vendored copy
+of Revolve2 (version 1.2.0), the modular-robot simulation framework by the
+CI Group, redistributed here so the repository is self-contained.
+
+    Revolve2 - https://github.com/ci-group/revolve2
+    Licensed under the GNU Lesser General Public License v3 (LGPLv3).
+    See engine/LICENSE for the full license text, and engine/PATCHES.md for the
+    handful of documented changes made to the vendored copy.
+
+Because Oribots vendors LGPLv3 code, Oribots' own code is likewise released
+under the LGPLv3 (see LICENSE), which keeps the combined work simple to
+redistribute. The distinction is only relevant to attribution: the six
+Revolve2 packages under `engine/` are the CI Group's work; everything outside
+`engine/` is Oribots' own.

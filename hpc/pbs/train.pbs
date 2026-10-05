@@ -1,0 +1,59 @@
+#!/bin/bash
+# Start a clean Oribots training run on CHPC Lengau (PBS Pro), inside Singularity.
+#
+# Submit from the repository root on lustre:
+#     qsub hpc/pbs/train.pbs
+#
+# Defaults train the spider_8ball CMA-ES setup. Override without editing the file:
+#     qsub -v CONFIG=config/spider_8ball_cmaes.py,MAIN=src/cmaes/main.py,NAME=spider8_cmaes hpc/pbs/train.pbs
+#
+# Each submission is a clean run into its own folder, output/<NAME>_<job id>.
+# A 96 h wall is rarely enough for a long CMA-ES run; continue it with
+# hpc/pbs/resume.pbs, which finds the latest snapshot in that folder itself.
+#
+# Requires: the SIF image on lustre (hpc/build_sif.sh) and a lustre checkout.
+# NUM_SIMULATORS follows NCPUS (PBS sets it) automatically.
+#
+# The project (-P), email (-M) and log paths (-o/-e) in the #PBS lines below are
+# placeholders. Replace them with your own before submitting (and set PROJECT
+# in tests/test_pbs.py to match): the scheduler reads
+# those lines itself, so shell variables such as $USER do not work there, and the
+# log folder must already exist.
+
+#PBS -N oribots_train
+#PBS -P <PROJECT>
+#PBS -q smp
+#PBS -l select=1:ncpus=24
+#PBS -l walltime=96:00:00
+#PBS -m abe
+#PBS -M you@example.org
+#PBS -o /mnt/lustre/users/<user>/oribots_logs/train.out
+#PBS -e /mnt/lustre/users/<user>/oribots_logs/train.err
+
+set -euo pipefail
+ulimit -s unlimited
+
+# PBS starts jobs in $HOME; move to the directory the job was submitted from.
+cd "$PBS_O_WORKDIR"
+
+# Defaults; override any of these with `qsub -v NAME=...,CONFIG=...`.
+: "${CONFIG:=config/spider_8ball_cmaes.py}"
+: "${MAIN:=src/cmaes/main.py}"
+: "${NAME:=spider_8ball_cmaes}"
+OUTPUT="output/${NAME}_${PBS_JOBID%%.*}"
+
+if [ ! -f "$CONFIG" ]; then
+    echo "Config not found: $CONFIG (cwd $(pwd))" >&2
+    exit 1
+fi
+
+source hpc/pbs/_run_in_container.sh
+
+echo "Host: $(hostname)"
+echo "Job ID: ${PBS_JOBID:-unset}"
+echo "NCPUS: ${NCPUS:-unset}"
+echo "Config: $CONFIG"
+echo "Main: $MAIN"
+echo "Output: $OUTPUT"
+
+run_in_container python run.py -r "$CONFIG" "$MAIN" "$OUTPUT"

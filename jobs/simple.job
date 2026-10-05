@@ -1,0 +1,55 @@
+#!/bin/bash
+# Train config/simple.py with src/ea/main.py on the cluster.
+#
+# Submit from the repository root:   sbatch jobs/simple.job
+# Needs the conda env from:          make setup-conda
+#
+# Every submission is a clean run into its own folder, output/simple_<job id>.
+# To continue a finished or cancelled run, resume it by hand with -c instead.
+# NUM_SIMULATORS in the config follows --ntasks through SLURM_NTASKS.
+
+#SBATCH --account=compsci
+#SBATCH --partition=ada
+#SBATCH --nodes=1 --ntasks=10
+#SBATCH --time=80:00:00
+#SBATCH --job-name=simple
+#SBATCH --output=jobs/logs/%x-%j.out
+#SBATCH --error=jobs/logs/%x-%j.err
+
+set -euo pipefail
+
+CONFIG=config/simple.py
+MAIN=src/ea/main.py
+OUTPUT="output/simple_${SLURM_JOB_ID}"
+
+REPO_DIR="${SLURM_SUBMIT_DIR:?submit this job with sbatch from the repository root}"
+cd "$REPO_DIR"
+if [ ! -f run.py ] || [ ! -d engine ]; then
+    echo "$REPO_DIR is not the repository root; submit with: sbatch jobs/simple.job" >&2
+    exit 1
+fi
+
+module load python/miniconda3-py3.12
+
+CONDA_ENV="$REPO_DIR/.conda"
+if [ ! -d "$CONDA_ENV" ]; then
+    echo "Missing conda environment: $CONDA_ENV" >&2
+    echo "Create it first with: make setup-conda" >&2
+    exit 1
+fi
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$CONDA_ENV"
+
+export MUJOCO_GL=egl
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+echo "Host: $(hostname)"
+echo "Job ID: $SLURM_JOB_ID"
+echo "SLURM_NTASKS: ${SLURM_NTASKS:-unset}"
+echo "Python: $(python --version)"
+echo "Output: $OUTPUT"
+
+python run.py -r "$CONFIG" "$MAIN" "$OUTPUT"

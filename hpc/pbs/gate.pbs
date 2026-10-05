@@ -1,0 +1,142 @@
+#!/bin/bash
+# Pre-run gate for CHPC Lengau: prove the Singularity image + this checkout work
+# on a real compute node before committing a 96 h training run.
+#
+# Submit from the repository root on lustre, after the .sif is in place:
+#     qsub hpc/pbs/gate.pbs
+#
+# The project (-P), email (-M) and log paths (-o/-e) in the #PBS lines below are
+# placeholders. Replace them with your own before submitting (and set PROJECT
+# in tests/test_pbs.py to match): the scheduler reads
+# those lines itself, so shell variables such as $USER do not work there, and the
+# log folder must already exist.
+#
+# It runs on the `serial` queue (for jobs smaller than a full node, so it often
+# starts sooner than smp) and, inside the container, proves the things Lengau
+# might break that a development machine or another cluster cannot vouch for:
+#   - the Singularity module loads on a compute node;
+#   - the pinned stack imports under Lengau's old kernel (glibc 2.17 host,
+#     Rocky 8 in the image);
+#   - MUJOCO_GL=egl renders offscreen (Mesa in the image, on the CPU);
+#   - multiprocessing uses fork and NUM_SIMULATORS follows NCPUS;
+#   - a tiny real training run + export + resume completes, writing snapshots;
+#   - a shrunken spider_8ball_cmaes run (the code path train.pbs runs) resumes
+#     and records every individual and trial exactly once;
+#   - the overwrite guard refuses a second run into the same folder.
+#
+# It writes to output/_pbs_gate and output/_pbs_gate_cmaes, replacing both on
+# each run. The log ends in "PBS GATE PASSED" on success.
+#
+# It deliberately does NOT run `make check` in full: several sub-checks are macOS
+# or Slurm oriented, and the code-level checks already run in the Docker gate
+# (docker/run_gate.sh) and on a development machine. This gate is about the
+# Lengau platform: the image, the kernel, EGL, PBS's NCPUS, and resume.
+
+#PBS -N oribots_gate
+#PBS -P <PROJECT>
+#PBS -q serial
+#PBS -l select=1:ncpus=4
+#PBS -l walltime=01:00:00
+#PBS -m abe
+#PBS -M you@example.org
+#PBS -o /mnt/lustre/users/<user>/oribots_logs/gate.out
+#PBS -e /mnt/lustre/users/<user>/oribots_logs/gate.err
+
+set -euo pipefail
+ulimit -s unlimited
+
+cd "$PBS_O_WORKDIR"
+if [ ! -f run.py ] || [ ! -d engine ]; then
+    echo "Not the repository root: $(pwd)" >&2
+    exit 1
+fi
+
+source hpc/pbs/_run_in_container.sh
+
+step() { printf '\n=== %s\n' "$*"; }
+
+echo "Host: $(hostname)"
+echo "Job ID: ${PBS_JOBID:-unset}"
+echo "NCPUS: ${NCPUS:-unset}"
+
+step "Platform inside the container (glibc from the image, kernel from Lengau)"
+run_in_container bash -lc 'uname -m; uname -r; ldd --version | sed -n 1p; grep -E "^PRETTY_NAME=" /etc/os-release'
+
+step "The pinned stack imports, and EGL renders offscreen"
+run_in_container python - <<'PY'
+import mujoco
+model = mujoco.MjModel.from_xml_string(
+    '<mujoco><worldbody><light pos="0 0 3"/>'
+    '<geom type="sphere" size="0.2" rgba="1 0 0 1"/></worldbody></mujoco>'
+)
+data = mujoco.MjData(model)
+mujoco.mj_forward(model, data)
+with mujoco.Renderer(model, 64, 64) as renderer:
+    renderer.update_scene(data)
+    image = renderer.render()
+assert image.max() > 0, "EGL rendered a black frame"
+print(f"mujoco {mujoco.__version__}, rendered {image.shape}, max pixel {image.max()}")
+PY
+
+step "Multiprocessing uses fork, and this checkout's code is the one running"
+run_in_container python - <<'PY'
+import multiprocessing, sys
+assert multiprocessing.get_start_method() == "fork", multiprocessing.get_start_method()
+sys.path.insert(0, "src")
+import paths
+paths.install("config")
+import revolve2.ci_group
+# The engine that loads must be THIS checkout's, under the bind-mounted repo.
+assert revolve2.ci_group.__file__.startswith(paths.ROOT.as_posix()), revolve2.ci_group.__file__
+print("fork start method; ci_group from", revolve2.ci_group.__file__)
+PY
+
+step "A tiny real run through the container (NUM_SIMULATORS follows NCPUS)"
+rm -rf output/_pbs_gate
+run_in_container python run.py -r config/_tiny.py src/ea/main.py output/_pbs_gate
+for f in gen1.pkl gen2.pkl; do
+    test -s "output/_pbs_gate/$f" || { echo "missing output/_pbs_gate/$f"; exit 1; }
+done
+
+step "Export and resume the tiny run"
+run_in_container python run.py -o output/_pbs_gate
+test -s output/_pbs_gate/generations.csv
+run_in_container python run.py -c output/_pbs_gate/gen2.pkl
+
+step "The real training path: a tiny pentagon-spider CMA-ES run, killed-free resume, recording"
+# spider_8ball_cmaes itself, shrunk: the pentagon core, head mode, the 8-ball
+# layout's code, scoring inside the worker processes, per-individual recording
+# and CMA-ES resume all run here exactly as in train.pbs, only for seconds.
+rm -rf output/_pbs_gate_cmaes
+mkdir -p output/_pbs_gate_cmaes
+tiny_cmaes="output/_pbs_gate_cmaes/config_tiny_spider_8ball_cmaes.py"
+cat config/spider_8ball_cmaes.py - > "$tiny_cmaes" <<'CFG'
+
+# --- PBS gate overrides ---
+SIMULATION_TIME = 6
+NUM_TRAINING_BALL_POSES = 4
+NUM_GENERATIONS = 2
+CMA_POPULATION_SIZE = 6
+CFG
+run_in_container python run.py -r "$tiny_cmaes" src/cmaes/main.py output/_pbs_gate_cmaes/run
+run_in_container python run.py -c output/_pbs_gate_cmaes/run/gen1.pkl
+run_in_container python - <<'PY'
+import csv, glob
+run = "output/_pbs_gate_cmaes/run"
+weights = list(csv.DictReader(open(f"{run}/weights.csv")))
+trials = list(csv.DictReader(open(glob.glob(f"{run}/individual_performance_*.csv")[0])))
+ids = sorted(row["individual_id"] for row in weights)
+expected = sorted(f"g{g}_i{i}" for g in (1, 2) for i in range(6))
+assert ids == expected, ids
+assert len(trials) == 2 * 6 * 4, len(trials)
+print(f"recorded {len(weights)} individuals and {len(trials)} trials, each exactly once, after a resume")
+PY
+
+step "A second run into the same folder is refused"
+if run_in_container python run.py -r config/_tiny.py src/ea/main.py output/_pbs_gate > /tmp/pbs_gate_refused.log 2>&1; then
+    echo "the overwrite guard did not refuse"; exit 1
+fi
+grep -q "cannot be recovered" /tmp/pbs_gate_refused.log
+echo "refused as expected"
+
+printf '\nPBS GATE PASSED\n'

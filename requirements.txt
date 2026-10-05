@@ -1,0 +1,26 @@
+# Third-party dependencies, pinned to the versions this project was developed
+# and visually tested with. Python 3.11 only (scipy 1.17 needs >=3.11, and the
+# vendored Revolve2 packages declare <3.12).
+#
+# The vendored Revolve2 packages in engine/ are installed separately with
+# `pip install --no-deps -e`, so THIS file is the single source of truth for
+# dependencies (see Makefile and engine/PATCHES.md).
+
+# Numerics. numpy must stay below 2: the vendored Revolve2 code is not numpy-2 clean.
+numpy==1.26.4
+scipy==1.17.1
+pyrr==0.10.3
+
+# Physics simulation and viewer
+mujoco==3.10.0
+dm-control==1.0.14
+mujoco-python-viewer==0.1.4
+glfw==2.10.0
+
+# Headless OpenCV only (used lazily, when recording video). Never install
+# opencv-python or opencv-contrib-python next to it: they clash over `cv2`.
+opencv-python-headless==4.11.0.86
+
+# Terrain generation (compiled at install time: needs a C compiler) and CMA-ES
+noise==1.2.2
+cma==4.4.4
