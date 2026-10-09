@@ -1,0 +1,66 @@
+#!/bin/bash
+# Start a NEW multibody contest run on the UCT cluster (Slurm).
+#
+# Submit from the Oribots repository root:
+#
+#     sbatch multibody/jobs/multibody_train.job
+#     sbatch --export=ALL,CONFIG=multibody/configs/<other>.py multibody/jobs/multibody_train.job
+#
+# CONFIG defaults to multibody/configs/spider_k4.py. Every submission trains into
+# its own new folder, output/multibody_<config name>_<job id>. A run that hits the
+# time limit loses at most the generation in progress; continue it with
+# multibody/jobs/multibody_resume.job. The worker count follows --ntasks through
+# SLURM_NTASKS (the config leaves NUM_WORKERS unset). Needs the conda env from
+# `make setup-conda` and, for spider_k4, the trained weights file the config names.
+
+#SBATCH --account=compsci
+#SBATCH --partition=ada
+#SBATCH --nodes=1 --ntasks=24
+#SBATCH --time=100:00:00
+#SBATCH --job-name=multibody_train
+#SBATCH --output=jobs/logs/%x-%j.out
+#SBATCH --error=jobs/logs/%x-%j.err
+
+set -euo pipefail
+
+REPO_DIR="${SLURM_SUBMIT_DIR:?submit this job with sbatch from the Oribots repository root}"
+cd "$REPO_DIR"
+if [ ! -f run.py ] || [ ! -d engine ] || [ ! -f multibody/run_multibody.py ]; then
+    echo "$REPO_DIR is not the Oribots repository root; submit with: sbatch multibody/jobs/multibody_train.job" >&2
+    exit 1
+fi
+
+CONFIG="${CONFIG:-multibody/configs/spider_k4.py}"
+if [ ! -f "$CONFIG" ]; then
+    echo "Multibody config not found: $CONFIG" >&2
+    exit 1
+fi
+case "${SLURM_NTASKS:-}" in
+    ''|*[!0-9]*|0) echo "SLURM_NTASKS must be a positive integer (got '${SLURM_NTASKS:-unset}')" >&2; exit 1 ;;
+esac
+OUTPUT="output/multibody_$(basename "$CONFIG" .py)_${SLURM_JOB_ID}"
+
+module load python/miniconda3-py3.12
+
+CONDA_ENV="$REPO_DIR/.conda"
+if [ ! -d "$CONDA_ENV" ]; then
+    echo "Missing conda environment: $CONDA_ENV (create it with: make setup-conda)" >&2
+    exit 1
+fi
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$CONDA_ENV"
+
+export MUJOCO_GL=egl
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+echo "Host: $(hostname)"
+echo "Job ID: $SLURM_JOB_ID"
+echo "SLURM_NTASKS: $SLURM_NTASKS"
+echo "Python: $(python --version)"
+echo "Config: $CONFIG"
+echo "Output: $OUTPUT"
+
+python multibody/run_multibody.py -r "$CONFIG" "$OUTPUT"

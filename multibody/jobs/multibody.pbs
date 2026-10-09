@@ -1,0 +1,76 @@
+#!/bin/bash
+# Start OR continue a multibody contest run on CHPC Lengau (PBS Pro), inside Singularity.
+#
+# Submit from the Oribots repository root, naming the run folder (required) and,
+# for a new run, the config:
+#
+#     qsub -v OUTPUT=output/multibody_spider_k4,CONFIG=multibody/configs/spider_k4.py multibody/jobs/multibody.pbs
+#
+# If OUTPUT already holds gen<N>.pkl snapshots, the job continues from the latest
+# one (largest N); otherwise it starts a new run of CONFIG in OUTPUT. A 96 h wall
+# rarely finishes a run, so chain jobs, each starting when the previous ends:
+#
+#     first=$(qsub -v OUTPUT=...,CONFIG=... multibody/jobs/multibody.pbs)
+#     qsub -W depend=afterany:$first -v OUTPUT=... \
+#          -o /mnt/lustre/users/<user>/oribots_logs/multibody.2.out \
+#          -e /mnt/lustre/users/<user>/oribots_logs/multibody.2.err multibody/jobs/multibody.pbs
+#
+# Give EVERY chained submission its own -o/-e (as above, with .3, .4, ...): the #PBS
+# -o/-e lines below are only a default, and without the override each job in a
+# chain would overwrite the previous job's logs. The scheduler reads the #PBS lines
+# itself, so shell variables do not work in them.
+#
+# The project (-P), email (-M) and log paths (-o/-e) in the #PBS lines are one
+# account's: change them to your own. The log folder must already exist.
+# Requires the SIF image on lustre (hpc/build_sif.sh) and a lustre checkout.
+
+#PBS -N oribots_multibody
+#PBS -P <PROJECT>
+#PBS -q smp
+#PBS -l select=1:ncpus=24
+#PBS -l walltime=96:00:00
+#PBS -m abe
+#PBS -M you@example.org
+#PBS -o /mnt/lustre/users/<user>/oribots_logs/multibody.out
+#PBS -e /mnt/lustre/users/<user>/oribots_logs/multibody.err
+
+set -euo pipefail
+
+cd "$PBS_O_WORKDIR"
+if [ ! -f run.py ] || [ ! -d engine ] || [ ! -f multibody/run_multibody.py ]; then
+    echo "$(pwd) is not the Oribots repository root; submit from there" >&2
+    exit 1
+fi
+if [ -z "${OUTPUT:-}" ]; then
+    echo "OUTPUT is required: qsub -v OUTPUT=output/<run folder>[,CONFIG=...] multibody/jobs/multibody.pbs" >&2
+    exit 1
+fi
+case "${NCPUS:-}" in
+    ''|*[!0-9]*|0) echo "NCPUS must be a positive integer (got '${NCPUS:-unset}')" >&2; exit 1 ;;
+esac
+
+source multibody/jobs/_latest_snapshot.sh
+LATEST=""
+if [ -d "$OUTPUT" ]; then
+    LATEST="$(latest_snapshot "$OUTPUT")"
+fi
+if [ -z "$LATEST" ] && { [ -z "${CONFIG:-}" ] || [ ! -f "$CONFIG" ]; }; then
+    echo "No snapshot in $OUTPUT and no existing CONFIG to start a new run (got '${CONFIG:-unset}')" >&2
+    exit 1
+fi
+
+# Every check above runs before anything is set up, so a refused job changes nothing.
+ulimit -s unlimited
+source hpc/pbs/_run_in_container.sh
+
+echo "Host: $(hostname)"
+echo "Job ID: ${PBS_JOBID:-unset}"
+echo "NCPUS: $NCPUS"
+
+if [ -n "$LATEST" ]; then
+    echo "Resuming: $LATEST"
+    run_in_container python multibody/run_multibody.py -c "$LATEST"
+else
+    echo "Starting: $CONFIG -> $OUTPUT"
+    run_in_container python multibody/run_multibody.py -r "$CONFIG" "$OUTPUT"
+fi

@@ -1,0 +1,5 @@
+# Multibody check-suite test scripts live here. This directory is deliberately
+# NOT a Python package: it has no __init__.py, exactly like Oribots/tests/, so
+# the name "tests" cannot shadow the single-robot tests directory on sys.path.
+# Each test is a plain script, run by `make -C multibody check`, that prints
+# "<NAME> CHECK PASSED" / "<NAME> CHECK FAILED" and exits 0 / non-zero.

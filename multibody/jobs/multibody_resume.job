@@ -1,0 +1,69 @@
+#!/bin/bash
+# CONTINUE a multibody contest run on the UCT cluster (Slurm) from its latest snapshot.
+#
+# Submit from the Oribots repository root, naming the run folder:
+#
+#     sbatch --export=ALL,OUTPUT=output/multibody_spider_k4_<job id> multibody/jobs/multibody_resume.job
+#
+# The job picks the latest gen<N>.pkl itself (largest N, so gen10 after gen9), so
+# the same command can be submitted again and again until the run is complete;
+# a complete run exits at once. Resuming repeats only the generation that was in
+# progress and continues bit for bit. OUTPUT is required: resuming the wrong
+# folder is the mistake to prevent.
+
+#SBATCH --account=compsci
+#SBATCH --partition=ada
+#SBATCH --nodes=1 --ntasks=24
+#SBATCH --time=100:00:00
+#SBATCH --job-name=multibody_resume
+#SBATCH --output=jobs/logs/%x-%j.out
+#SBATCH --error=jobs/logs/%x-%j.err
+
+set -euo pipefail
+
+REPO_DIR="${SLURM_SUBMIT_DIR:?submit this job with sbatch from the Oribots repository root}"
+cd "$REPO_DIR"
+if [ ! -f run.py ] || [ ! -d engine ] || [ ! -f multibody/run_multibody.py ]; then
+    echo "$REPO_DIR is not the Oribots repository root" >&2
+    exit 1
+fi
+if [ -z "${OUTPUT:-}" ]; then
+    echo "OUTPUT is required: sbatch --export=ALL,OUTPUT=output/<run folder> multibody/jobs/multibody_resume.job" >&2
+    exit 1
+fi
+if [ ! -d "$OUTPUT" ]; then
+    echo "Run folder not found: $OUTPUT" >&2
+    exit 1
+fi
+source multibody/jobs/_latest_snapshot.sh
+LATEST="$(latest_snapshot "$OUTPUT")"
+if [ -z "$LATEST" ]; then
+    echo "No gen<N>.pkl snapshot to resume from in $OUTPUT" >&2
+    exit 1
+fi
+case "${SLURM_NTASKS:-}" in
+    ''|*[!0-9]*|0) echo "SLURM_NTASKS must be a positive integer (got '${SLURM_NTASKS:-unset}')" >&2; exit 1 ;;
+esac
+
+module load python/miniconda3-py3.12
+
+CONDA_ENV="$REPO_DIR/.conda"
+if [ ! -d "$CONDA_ENV" ]; then
+    echo "Missing conda environment: $CONDA_ENV (create it with: make setup-conda)" >&2
+    exit 1
+fi
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$CONDA_ENV"
+
+export MUJOCO_GL=egl
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+echo "Host: $(hostname)"
+echo "Job ID: $SLURM_JOB_ID"
+echo "SLURM_NTASKS: $SLURM_NTASKS"
+echo "Resuming: $LATEST"
+
+python multibody/run_multibody.py -c "$LATEST"
