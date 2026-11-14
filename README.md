@@ -10,7 +10,7 @@ the simulator library is vendored in `engine/`, and nothing is imported from
 outside it.
 
 > **Coming from Oribots-main?** This branch is the same code with much faster
-> training and Windows support. Everything works as before; the configs now
+> training. Everything works as before; the configs now
 > use a cheaper physics setting that changes results slightly (one line per
 > config switches it back). See [CHANGES.md](CHANGES.md).
 
