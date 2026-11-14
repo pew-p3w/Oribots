@@ -9,6 +9,11 @@ Everything needed to train, watch and analyse a run is in this repository:
 the simulator library is vendored in `engine/`, and nothing is imported from
 outside it.
 
+> **Coming from Oribots-main?** This branch is the same code with much faster
+> training and Windows support. Everything works as before; the configs now
+> use a cheaper physics setting that changes results slightly (one line per
+> config switches it back). See [CHANGES.md](CHANGES.md).
+
 ## Quick start
 
 ```bash
@@ -23,6 +28,9 @@ Use `.venv.nosync/bin/python` in place of `python` unless the venv is active
 (`source .venv.nosync/bin/activate`). On macOS, the two commands that open a
 window (`randomtest`, `t`) need `mjpython` instead of `python` see
 [Watching a robot](#watchingarobot).
+
+On Windows: `setup.bat` creates `.venv`, `tests\run_tests.bat` runs the
+checks, and the commands above use `.venv\Scripts\python`.
 
 ## Repository map
 

@@ -30,6 +30,7 @@ def simulate_scene(
     fast_sim: bool,
     viewer_type: ViewerType,
     render_backend: RenderBackend = RenderBackend.EGL,
+    integrator: str = "RK4",
 ) -> list[SimulationState]:
     """
     Simulate a scene.
@@ -47,6 +48,7 @@ def simulate_scene(
     :param fast_sim: If fancy rendering is disabled.
     :param viewer_type: The type of viewer used for the rendering in a window.
     :param render_backend: The backend to be used for rendering (EGL by default and switches to GLFW if no cameras are on the robot).
+    :param integrator: MuJoCo integrator (Oribots patch; RK4 by default, as before).
     :returns: The results of simulation. The number of returned states depends on `sample_step`.
     :raises ValueError: If the viewer is not able to record.
     """
@@ -54,7 +56,11 @@ def simulate_scene(
 
     """Define mujoco data and model objects for simuating."""
     model, mapping = scene_to_model(
-        scene, simulation_timestep, cast_shadows=cast_shadows, fast_sim=fast_sim
+        scene,
+        simulation_timestep,
+        cast_shadows=cast_shadows,
+        fast_sim=fast_sim,
+        integrator=integrator,
     )
     data = mujoco.MjData(model)
 

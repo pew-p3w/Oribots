@@ -22,5 +22,7 @@ glfw==2.10.0
 opencv-python-headless==4.11.0.86
 
 # Terrain generation (compiled at install time: needs a C compiler) and CMA-ES
-noise==1.2.2
+# noise is skipped on Windows (no wheel, needs a C compiler); only the rugged
+# terrain uses it, and engine/ci_group terrains.py imports it lazily.
+noise==1.2.2; sys_platform != "win32"
 cma==4.4.4

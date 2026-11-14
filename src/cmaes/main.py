@@ -172,7 +172,9 @@ def main() -> None:
         initial_mean = [config.CMA_INITIAL_MEAN] * num_params
         options = cma.CMAOptions()
         options.set("bounds", list(config.CMA_BOUNDS))
-        options.set("seed", seed_from_time() % 2**32)
+        # A config may fix SEED so two runs start CMA-ES identically.
+        seed = getattr(config, "SEED", None)
+        options.set("seed", (seed_from_time() if seed is None else seed) % 2**32)
         options.set("maxiter", config.NUM_GENERATIONS)
         options.set("verbose", -9)
         if getattr(config, "CMA_POPULATION_SIZE", None) is not None:

@@ -46,6 +46,7 @@ def scene_to_model(
     simulation_timestep: float,
     cast_shadows: bool,
     fast_sim: bool,
+    integrator: str = "RK4",
 ) -> tuple[mujoco.MjModel, AbstractionToMujocoMapping]:
     """
     Convert a scene to a MuJoCo model.
@@ -54,6 +55,8 @@ def scene_to_model(
     :param scene: The scene to convert.
     :param simulation_timestep: The duration to integrate over during each step of the simulation. In seconds.
     :param fast_sim: If simulations have to be fast, unnecessary stuff will be turned off.
+    :param integrator: MuJoCo integrator ('RK4', 'Euler', 'implicit', 'implicitfast').
+        Oribots patch: this was hard-coded to RK4 (still the default).
     :returns: The created MuJoCo model and mapping from the simulation abstraction to the model.
     """
     mapping = AbstractionToMujocoMapping()
@@ -63,7 +66,7 @@ def scene_to_model(
     env_mjcf.compiler.angle = "radian"
 
     env_mjcf.option.timestep = simulation_timestep
-    env_mjcf.option.integrator = "RK4"
+    env_mjcf.option.integrator = integrator
 
     env_mjcf.option.gravity = [0, 0, -9.81]
 

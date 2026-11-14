@@ -11,6 +11,11 @@ output/analysis/*.csv
 jobs/logs/*
 !jobs/logs/.gitkeep
 
+# Benchmark scratch: generated configs, per-machine results, test logs
+bench/_generated/
+bench/results/
+tests/logs/
+
 # Python
 __pycache__/
 *.py[cod]

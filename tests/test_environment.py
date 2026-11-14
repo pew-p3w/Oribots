@@ -30,7 +30,11 @@ REVOLVE2_MODULES = [
     "revolve2.simulators.mujoco_simulator",
 ]
 
-THIRD_PARTY_MODULES = ["numpy", "scipy", "pyrr", "mujoco", "dm_control", "glfw", "mujoco_viewer", "cv2", "noise", "cma"]
+THIRD_PARTY_MODULES = ["numpy", "scipy", "pyrr", "mujoco", "dm_control", "glfw", "mujoco_viewer", "cv2", "cma"]
+# `noise` has no Windows wheel; it is only needed for the rugged terrain, which
+# imports it lazily (engine/PATCHES.md), so it is not required there.
+if sys.platform != "win32":
+    THIRD_PARTY_MODULES.append("noise")
 
 
 def engine_roots() -> list[Path]:

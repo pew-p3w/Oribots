@@ -113,6 +113,7 @@ class LocalSimulator(Simulator):
                         self._cast_shadows,
                         self._fast_sim,
                         self._viewer_type,
+                        integrator=batch.parameters.integrator,
                     )
                     for scene_index, scene in enumerate(batch.scenes)
                 ]
@@ -132,6 +133,7 @@ class LocalSimulator(Simulator):
                     self._cast_shadows,
                     self._fast_sim,
                     self._viewer_type,
+                    integrator=batch.parameters.integrator,
                 )
                 for scene_index, scene in enumerate(batch.scenes)
             ]

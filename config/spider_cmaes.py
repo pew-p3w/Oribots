@@ -66,6 +66,12 @@ CMA_BOUNDS = [-1.0, 1.0]
 # None lets CMA-ES choose its own population size from the parameter count.
 CMA_POPULATION_SIZE = 100
 
+# Physics. implicitfast at 5 ms is about 5x faster than the original RK4 at
+# 1 ms and scores robots nearly the same (see CHANGES.md). For the original
+# physics, set SIM_INTEGRATOR = "RK4" and SIM_TIMESTEP = 0.001.
+SIM_INTEGRATOR = "implicitfast"
+SIM_TIMESTEP = 0.005
+
 # How long each trial runs, and how many run at once. On the HPC the simulator
 # count follows the Slurm task count; on a laptop it stays modest, since every
 # simulator is a separate process.
