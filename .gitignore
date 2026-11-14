@@ -22,19 +22,32 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Environments
 .venv/
 .venv.nosync/
+venv/
+env/
 .conda/
+.env
 
 # Notebooks
 .ipynb_checkpoints/
 
 # OS / editor
 .DS_Store
+Thumbs.db
+desktop.ini
 .vscode/
 .idea/
+*.swp
+*~
 
-# MuJoCo crash log
+# Logs and crash dumps
+*.log
 MUJOCO_LOG.TXT
