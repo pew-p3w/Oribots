@@ -464,6 +464,11 @@ def simulate_and_score(task: dict[str, Any]) -> tuple[float, dict[str, float] | 
     :param task: A worker task for which ``supports(task)`` is True.
     :returns: The trial fitness and, if requested, its movement record.
     """
+    import native_trial
+
     trial = _Trial(task)
-    robot_pos, robot_quat, ball_pos = _run(trial, task)
+    samples = native_trial.run(trial, task) if native_trial.enabled() else None
+    if samples is None:
+        samples = _run(trial, task)
+    robot_pos, robot_quat, ball_pos = samples
     return _score(robot_pos, robot_quat, ball_pos, task)

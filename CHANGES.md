@@ -76,6 +76,34 @@ processes every generation, and each one had to load MuJoCo and the config
 again: about a second lost per generation. Now the workers are kept between
 generations. Nothing about the trials changes, so neither do the results.
 
+## Step 4: the trial loop in C++ (optional build, results identical)
+
+After steps 1 to 3, about a fifth of each trial was still Python: the brain
+step and the step bookkeeping, 20 times per simulated second. We moved that
+loop into C++ (`src/native/trial_loop.cpp`). Building the robot and scoring
+the trial stay in Python.
+
+The tricky part was keeping the results identical. A plain C++ version gets
+the last digit wrong now and then, because NumPy's `matmul`, `dot` and `tanh`
+round slightly differently from plain C maths. So the C++ loop calls the very
+same routines Python uses (NumPy's OpenBLAS, NumPy's `tanh`, the C library
+behind Python's `math`). The results are **identical, bit for bit**, on every
+config, every integrator and trials that end early (`make check-native-trial`).
+
+It is about **1.25x faster** on the real 1000 s trials (about 1.12x on the
+short 60 s benchmark trials, where building the robot is a bigger share).
+
+It needs a C++ compiler, once per machine:
+
+```
+python src/native/build_native.py      (Windows: .venv\Scripts\python ...)
+```
+
+On Windows that means MinGW-w64 g++ (for example WinLibs, a zip, no admin
+needed); on Linux and the cluster, the normal g++. Without the build, or if
+the build does not match the installed MuJoCo, training simply uses the
+Python loop, with the same results.
+
 ## Putting it together
 
 | | per generation* | speed-up |
@@ -95,14 +123,18 @@ give just 4%, because the physics still dominates.
 | cheaper physics | `SIM_INTEGRATOR = "RK4"` and `SIM_TIMESTEP = 0.001` in the config (or delete the two lines) |
 | fast trial loop | `FAST_TRIAL = False` in the config |
 | kept workers | `PERSISTENT_WORKERS = False` in the config |
+| C++ trial loop | `NATIVE_TRIAL = False` in the config (or just don't build it) |
 
 ## One thing to watch out for
 
 The fast trial loop has its own copy of the brain step and the scoring. If
 you change the brain (`BallAwareCpgBrain`), the fitness (`_trial_fitness`) or
 the "reached the ball" check, change `src/fast_trial.py` the same way, or set
-`FAST_TRIAL = False` until you do. Then run `make check-fast-trial` (on
-Windows: `tests\run_tests.bat fast_trial`); it fails if the two disagree.
+`FAST_TRIAL = False` until you do. The C++ loop (`src/native/trial_loop.cpp`)
+is a third copy of the brain step: change it too and rebuild, or set
+`NATIVE_TRIAL = False`. Then run `make check-fast-trial check-native-trial` (on
+Windows: `tests\run_tests.bat fast_trial native_trial`); they fail if the
+copies disagree.
 
 ## Smaller extras
 
@@ -111,5 +143,5 @@ Windows: `tests\run_tests.bat fast_trial`); it fails if the two disagree.
 - `config/spider_arena_cmaes.py`: the spider in a small square arena with walls.
 - Windows works now: `setup.bat` to install, `tests\run_tests.bat` to test.
 - `bench/` has the tools we used to measure all this, and the videos.
-- Full measurements and the options we did not take (a C++ rewrite, the
-  GPU): `PERFORMANCE_OPTIONS.md`. Engine patches: `engine/PATCHES.md`.
+- Full measurements and the options we did not take (the GPU):
+  `PERFORMANCE_OPTIONS.md`. Engine patches: `engine/PATCHES.md`.

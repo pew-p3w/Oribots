@@ -18,8 +18,8 @@ if not exist "%PY%" (
 )
 
 rem Same order as `make check`; new checks go after the originals.
-set "ALL=environment bodies brain genotype evaluator head configs ea cmaes run jobs pbs bench physics fast_trial workflow"
-set "QUICK=environment bodies brain genotype evaluator head configs ea cmaes run jobs pbs bench physics fast_trial"
+set "ALL=environment bodies brain genotype evaluator head configs ea cmaes run jobs pbs bench physics fast_trial native_trial workflow"
+set "QUICK=environment bodies brain genotype evaluator head configs ea cmaes run jobs pbs bench physics fast_trial native_trial"
 
 if "%~1"=="" (
     set "CHECKS=%ALL%"

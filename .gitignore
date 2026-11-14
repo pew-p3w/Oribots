@@ -16,6 +16,11 @@ bench/_generated/
 bench/results/
 tests/logs/
 
+# The C++ trial loop is built per machine (python src/native/build_native.py)
+src/native/*.dll
+src/native/*.so
+src/native/*.dylib
+
 # Python
 __pycache__/
 *.py[cod]
