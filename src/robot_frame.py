@@ -169,15 +169,38 @@ def movement_report(scene_states: list[Any], robot: Any, ball: Any) -> dict[str,
     :param ball: The ball.
     :returns: Distances in metres and angles in degrees.
     """
-    offset = reference_offset()
     poses = [
         state.get_modular_robot_simulation_state(robot).get_pose()
         for state in scene_states
     ]
     position = np.array([[p.position.x, p.position.y, p.position.z] for p in poses])
+    reported = np.array([[float(v) for v in p.orientation] for p in poses])
+    ball_position = (
+        scene_states[-1]._simulation_state.get_multi_body_system_pose(ball).position
+    )
+    return movement_report_from_arrays(
+        position, reported, (ball_position.x, ball_position.y), reference_offset()
+    )
+
+
+def movement_report_from_arrays(
+    position: np.ndarray,
+    reported: np.ndarray,
+    ball_xy: tuple[float, float],
+    offset: tuple[float, float, float],
+) -> dict[str, float]:
+    """
+    ``movement_report`` on arrays (shared with ``src/fast_trial.py``).
+
+    :param position: Robot core positions, (n, 3).
+    :param reported: Robot core orientations as reported, (n, 4): MuJoCo's
+        ``xquat`` (w, x, y, z), which the simulation state reads as (x, y, z, w).
+    :param ball_xy: The ball's x and y in the last state.
+    :param offset: The measuring point's offset (``reference_offset()``).
+    :returns: Distances in metres and angles in degrees.
+    """
     # The simulator reports the orientation as (w, x, y, z) read as (x, y, z, w);
     # physical_orientation() undoes that, and so does this reordering.
-    reported = np.array([[float(v) for v in p.orientation] for p in poses])
     physical = reported[:, [1, 2, 3, 0]]
     heading = _rotate(physical, (1.0, 0.0, 0.0))
     point = position if offset == ZERO_OFFSET else position + _rotate(physical, offset)
@@ -197,11 +220,8 @@ def movement_report(scene_states: list[Any], robot: Any, ball: Any) -> dict[str,
     def yaw_degrees(index: int) -> float:
         return math.degrees(math.atan2(heading[index, 1], heading[index, 0]))
 
-    ball_position = (
-        scene_states[-1]._simulation_state.get_multi_body_system_pose(ball).position
-    )
     to_ball = math.degrees(
-        math.atan2(ball_position.y - point[-1, 1], ball_position.x - point[-1, 0])
+        math.atan2(ball_xy[1] - point[-1, 1], ball_xy[0] - point[-1, 0])
     )
     end_yaw = yaw_degrees(-1)
     angle_to_ball = (to_ball - end_yaw + 180.0) % 360.0 - 180.0

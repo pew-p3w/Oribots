@@ -490,7 +490,6 @@ def _simulate_and_report(
 
     from ball_aware_brain import BallAwareCpgBrain
     from revolve2.ci_group.interactive_objects import Ball
-    from revolve2.ci_group.simulation_parameters import make_standard_batch_parameters
     from revolve2.experimentation.logging import setup_logging
     from revolve2.experimentation.rng import make_rng_time_seed
     from revolve2.modular_robot import ModularRobot
@@ -535,8 +534,15 @@ def _simulate_and_report(
 
     logging.info(f"Using {viewer_type} MuJoCo viewer.")
     simulator = LocalSimulator(viewer_type=viewer_type)
-    batch_parameters = make_standard_batch_parameters()
-    batch_parameters.simulation_time = simulation_time
+    # The physics the controller was trained with (integrator and timestep come
+    # from the config; a config without them gets the original RK4 at 1 ms).
+    import physics
+
+    batch_parameters = physics.batch_parameters(config, simulation_time=simulation_time)
+    logging.info(
+        f"Physics: integrator {batch_parameters.integrator}, "
+        f"timestep {batch_parameters.simulation_timestep:g} s."
+    )
 
     logging.info(f"Simulating for up to {simulation_time} seconds.")
     scene_states = simulate_scenes(

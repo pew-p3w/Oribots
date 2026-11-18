@@ -47,6 +47,7 @@ simulation batch per ball instead, with identical results.
 import logging
 import math
 import os
+import weakref
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from typing import Any
 
@@ -54,12 +55,12 @@ import numpy as np
 import numpy.typing as npt
 
 import config
+import physics
 import robot_frame
 import scoring_worker
 from ball_aware_brain import BallAwareCpgBrain, steering_parameter_count
 
 from revolve2.ci_group.interactive_objects import Ball
-from revolve2.ci_group.simulation_parameters import make_standard_batch_parameters
 from revolve2.experimentation.rng import make_rng_time_seed
 from revolve2.modular_robot import ModularRobot
 from revolve2.modular_robot.body.base import ActiveHinge
@@ -97,7 +98,12 @@ class Evaluator:
             headless=True,
             num_simulators=config.NUM_SIMULATORS,
         )
-        self._rng = make_rng_time_seed()
+        # A config may fix SEED so two runs train on the same ball positions;
+        # without it the seed comes from the clock, as before.
+        seed = getattr(config, "SEED", None)
+        self._rng = (
+            make_rng_time_seed() if seed is None else np.random.default_rng(seed)
+        )
         active_hinges = config.BODY.find_modules_of_type(ActiveHinge)
         (
             self._cpg_network_structure,
@@ -346,39 +352,13 @@ class Evaluator:
         """
         num_controllers, num_poses = len(population), len(ball_poses)
         total = num_controllers * num_poses
-        parameters = make_standard_batch_parameters()
-        parameters.simulation_time = config.SIMULATION_TIME
-        common = {
-            "config_path": config.__file__,
-            "control_step": 1.0 / parameters.control_frequency,
-            "sample_step": (
-                None
-                if parameters.sampling_frequency is None
-                else 1.0 / parameters.sampling_frequency
-            ),
-            "sampling_frequency": parameters.sampling_frequency,
-            "simulation_time": parameters.simulation_time,
-            "simulation_timestep": parameters.simulation_timestep,
-            "cast_shadows": getattr(self._simulator, "_cast_shadows", False),
-            "fast_sim": getattr(self._simulator, "_fast_sim", False),
-            "viewer_type": getattr(self._simulator, "_viewer_type"),
-            "with_movement": with_movement,
-        }
+        common = self.worker_task_common(with_movement)
 
         def make_task(index: int) -> dict[str, Any]:
             pose_index, controller_index = divmod(index, num_controllers)
-            scene, robot, ball = self._make_scene(
-                population[controller_index], ball_poses[pose_index]
+            return self.worker_task(
+                common, population[controller_index], ball_poses[pose_index], index
             )
-            simulation_scene, mapping = scene.to_simulation_scene()
-            return {
-                **common,
-                "scene_id": index,
-                "scene": simulation_scene,
-                "mapping": mapping,
-                "robot": robot,
-                "ball": ball,
-            }
 
         for pose_index, ball_pose in enumerate(ball_poses):
             logging.info(
@@ -398,7 +378,7 @@ class Evaluator:
             for index in range(total):
                 results[index] = scoring_worker.simulate_and_score(make_task(index))
         else:
-            executor = ProcessPoolExecutor(max_workers=workers)
+            executor = self._worker_pool(workers)
             pending: dict[Any, int] = {}
             next_index = done = 0
             report_every = max(1, total // 20)
@@ -420,12 +400,12 @@ class Evaluator:
                 # Something failed (or the run was interrupted): stop everything now
                 # instead of letting in-flight simulations run to their end. The
                 # workers share nothing, so stopping them is safe.
-                workers_running = list(getattr(executor, "_processes", {}).values())
-                executor.shutdown(wait=False, cancel_futures=True)
-                for process in workers_running:
-                    process.terminate()
+                self._pool = None
+                _stop_pool(executor)
                 raise
-            executor.shutdown(wait=True)
+            if not self._keep_pool():
+                self._pool = None
+                executor.shutdown(wait=True)
 
         fitnesses = [
             [results[p * num_controllers + c][0] for c in range(num_controllers)]  # type: ignore[index]
@@ -436,6 +416,97 @@ class Evaluator:
             for p in range(num_poses)
         ]
         return fitnesses, movements
+
+    @staticmethod
+    def _keep_pool() -> bool:
+        """
+        Whether worker processes are kept between evaluations.
+
+        On by default: starting a fresh pool every generation costs about a
+        second on Windows (each worker re-imports MuJoCo and the config), and
+        reusing it changes nothing, because every trial is independent and
+        deterministic. ``PERSISTENT_WORKERS = False`` in a config, or
+        ``REVOLVE2_PERSISTENT_WORKERS=0``, starts a fresh pool every time.
+
+        :returns: True to keep the pool.
+        """
+        return os.environ.get("REVOLVE2_PERSISTENT_WORKERS", "1") != "0" and bool(
+            getattr(config, "PERSISTENT_WORKERS", True)
+        )
+
+    def _worker_pool(self, workers: int) -> ProcessPoolExecutor:
+        """
+        The worker pool for an evaluation: the kept one, or a new one.
+
+        :param workers: Number of worker processes.
+        :returns: A pool with that many workers.
+        """
+        pool = getattr(self, "_pool", None)
+        if pool is not None and self._pool_workers == workers and not getattr(pool, "_broken", False):
+            return pool
+        if pool is not None:
+            _stop_pool(pool)
+        self._pool = ProcessPoolExecutor(max_workers=workers)
+        self._pool_workers = workers
+        # Stop the workers when this evaluator goes away (and at exit).
+        weakref.finalize(self, _stop_pool, self._pool, False)
+        return self._pool
+
+    def close(self) -> None:
+        """Stop the kept worker processes, if any (they also stop at exit)."""
+        pool = getattr(self, "_pool", None)
+        self._pool = None
+        if pool is not None:
+            pool.shutdown(wait=True)
+
+    def worker_task_common(self, with_movement: bool) -> dict[str, Any]:
+        """
+        The settings every worker task of one evaluation shares.
+
+        :param with_movement: Also collect each trial's movement record.
+        :returns: The shared part of a worker task.
+        """
+        parameters = physics.batch_parameters(config)
+        return {
+            "config_path": config.__file__,
+            "control_step": 1.0 / parameters.control_frequency,
+            "sample_step": (
+                None
+                if parameters.sampling_frequency is None
+                else 1.0 / parameters.sampling_frequency
+            ),
+            "sampling_frequency": parameters.sampling_frequency,
+            "simulation_time": parameters.simulation_time,
+            "simulation_timestep": parameters.simulation_timestep,
+            "integrator": parameters.integrator,
+            "cast_shadows": getattr(self._simulator, "_cast_shadows", False),
+            "fast_sim": getattr(self._simulator, "_fast_sim", False),
+            "viewer_type": getattr(self._simulator, "_viewer_type"),
+            "with_movement": with_movement,
+        }
+
+    def worker_task(
+        self, common: dict[str, Any], controller: Any, ball_pose: Pose, scene_id: int
+    ) -> dict[str, Any]:
+        """
+        Everything a worker needs for one trial.
+
+        :param common: ``worker_task_common()``.
+        :param controller: The controller (parameter vector or genotype).
+        :param ball_pose: Where the ball starts.
+        :param scene_id: The trial's index in this evaluation.
+        :returns: The task for ``scoring_worker.simulate_and_score``.
+        """
+        scene, robot, ball = self._make_scene(controller, ball_pose)
+        simulation_scene, mapping = scene.to_simulation_scene()
+        return {
+            **common,
+            "scene_id": scene_id,
+            "scene": simulation_scene,
+            "mapping": mapping,
+            "robot": robot,
+            "ball": ball,
+        }
 
     def _evaluate_scenes(
         self,
@@ -464,8 +535,7 @@ class Evaluator:
             balls.append(ball)
             scenes.append(scene)
 
-        batch_parameters = make_standard_batch_parameters()
-        batch_parameters.simulation_time = config.SIMULATION_TIME
+        batch_parameters = physics.batch_parameters(config)
 
         logging.info(f"Starting simulation batch with {len(scenes)} scenes.")
         all_scene_states = simulate_scenes(
@@ -495,6 +565,22 @@ class Evaluator:
         return fitnesses, movements
 
 
+def _stop_pool(pool: ProcessPoolExecutor, terminate: bool = True) -> None:
+    """
+    Shut a worker pool down without waiting for running simulations.
+
+    :param pool: The pool.
+    :param terminate: Also kill the worker processes now (after a failure or
+        an interrupt, so in-flight simulations do not run to their end; the
+        workers share nothing, so this is safe).
+    """
+    workers_running = list((getattr(pool, "_processes", None) or {}).values())
+    pool.shutdown(wait=False, cancel_futures=True)
+    if terminate:
+        for process in workers_running:
+            process.terminate()
+
+
 def simulate_and_score_scene(task: dict[str, Any]) -> tuple[float, dict[str, float] | None]:
     """
     Simulate one trial and score it (this runs inside a worker process).
@@ -503,6 +589,26 @@ def simulate_and_score_scene(task: dict[str, Any]) -> tuple[float, dict[str, flo
     main process: run the simulation, wrap each state the way
     ``simulate_scenes`` does, and score it with the same functions, so the
     numbers are identical.
+
+    The fast path (``src/fast_trial.py``) gives the same numbers bit for bit
+    without the per-tick state objects; it is used whenever it supports the
+    trial, unless ``FAST_TRIAL = False`` or ``REVOLVE2_FAST_TRIAL=0``.
+
+    :param task: Everything needed for one trial, built by the Evaluator.
+    :returns: The trial fitness and, if requested, its movement record.
+    """
+    import fast_trial
+
+    if fast_trial.enabled() and fast_trial.supports(task):
+        return fast_trial.simulate_and_score(task)
+    return simulate_and_score_scene_original(task)
+
+
+def simulate_and_score_scene_original(
+    task: dict[str, Any],
+) -> tuple[float, dict[str, float] | None]:
+    """
+    ``simulate_and_score_scene`` through the original simulator loop.
 
     :param task: Everything needed for one trial, built by the Evaluator.
     :returns: The trial fitness and, if requested, its movement record.
@@ -525,6 +631,7 @@ def simulate_and_score_scene(task: dict[str, Any]) -> tuple[float, dict[str, flo
         task["cast_shadows"],
         task["fast_sim"],
         task["viewer_type"],
+        integrator=task.get("integrator", physics.DEFAULT_INTEGRATOR),
     )
     scene_states = [SceneSimulationState(state, task["mapping"]) for state in states]
     fitness = _trial_fitness(

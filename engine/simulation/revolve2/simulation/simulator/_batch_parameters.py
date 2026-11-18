@@ -29,3 +29,10 @@ class BatchParameters:
 
     control_frequency: float
     """Similar to `sampling_frequency` but for how often the control function is called."""
+
+    integrator: str = "RK4"
+    """
+    MuJoCo integrator: 'RK4' (the original, and the default), 'Euler', 'implicit'
+    or 'implicitfast'. Oribots patch: previously hard-coded to RK4 in
+    scene_to_model; see engine/PATCHES.md.
+    """

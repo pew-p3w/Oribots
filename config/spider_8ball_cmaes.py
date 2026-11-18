@@ -85,6 +85,12 @@ CMA_INITIAL_MEAN = 0.0
 CMA_BOUNDS = [-1.0, 1.0]
 CMA_POPULATION_SIZE = 500
 
+# Physics. implicitfast at 5 ms is about 5x faster than the original RK4 at
+# 1 ms and scores robots nearly the same (see CHANGES.md). For the original
+# physics, set SIM_INTEGRATOR = "RK4" and SIM_TIMESTEP = 0.001.
+SIM_INTEGRATOR = "implicitfast"
+SIM_TIMESTEP = 0.005
+
 # How long each trial runs, and how many run at once. On a cluster the
 # simulator count follows the scheduler's core count; on a laptop it stays
 # modest, since every simulator is a separate process.

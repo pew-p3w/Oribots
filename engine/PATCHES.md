@@ -30,6 +30,23 @@ upstream except the items below.
     (`src/robot_frame.py`) uses the true orientation.
   - `StopOnRobotObjectDistance` gained `reference_offset` (default `(0, 0, 0)`, the
     core, as upstream), so "ball reached" can be measured from a head.
+- Configurable integrator (OrigbotsRewrite, option 1 of `PERFORMANCE_OPTIONS.md`).
+  Upstream hard-codes RK4. Every default is still `"RK4"`, so a caller that does
+  not pass an integrator gets exactly the upstream physics:
+  - `simulation/.../simulator/_batch_parameters.py`: `BatchParameters` gained
+    `integrator: str = "RK4"`.
+  - `simulators/.../_scene_to_model.py`: `scene_to_model(..., integrator="RK4")`
+    sets `option.integrator` from it instead of the literal `"RK4"`.
+  - `simulators/.../_simulate_scene.py`: `simulate_scene(..., integrator="RK4")`
+    passes it to `scene_to_model`.
+  - `simulators/.../_local_simulator.py`: passes `batch.parameters.integrator`
+    on to `simulate_scene`.
+  The project chooses it through `src/physics.py` (`SIM_INTEGRATOR`,
+  `SIM_TIMESTEP` in a config).
+- `ci_group/revolve2/ci_group/terrains.py`: `from noise import pnoise2` moved into
+  the rugged-heightmap function, the only user. `noise` has no Windows wheel and
+  needs a C compiler; every shipped config uses the flat terrain, so Windows
+  installs skip it (`requirements.txt` marker).
 
 ## Manifest changes (`pyproject.toml`)
 

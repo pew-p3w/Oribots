@@ -11,25 +11,48 @@ output/analysis/*.csv
 jobs/logs/*
 !jobs/logs/.gitkeep
 
+# Benchmark scratch: generated configs, per-machine results, test logs
+bench/_generated/
+bench/results/
+tests/logs/
+
+# The C++ trial loop is built per machine (python src/native/build_native.py)
+src/native/*.dll
+src/native/*.so
+src/native/*.dylib
+
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 build/
 dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Environments
 .venv/
 .venv.nosync/
+venv/
+env/
 .conda/
+.env
 
 # Notebooks
 .ipynb_checkpoints/
 
 # OS / editor
 .DS_Store
+Thumbs.db
+desktop.ini
 .vscode/
 .idea/
+*.swp
+*~
 
-# MuJoCo crash log
+# Logs and crash dumps
+*.log
 MUJOCO_LOG.TXT

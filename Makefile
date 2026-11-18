@@ -37,7 +37,7 @@ ENGINE_PACKAGES = \
 	engine/ci_group \
 	engine/simulators/mujoco_simulator
 
-.PHONY: help setup setup-conda check verify check-bodies check-brain check-genotype check-evaluator check-head check-configs check-ea check-cmaes check-run check-workflow check-jobs check-pbs train test export
+.PHONY: help setup setup-conda check verify check-bodies check-brain check-genotype check-evaluator check-head check-configs check-ea check-cmaes check-run check-workflow check-jobs check-pbs check-physics check-fast-trial check-native-trial check-bench build-native train test export
 
 help:
 	@echo "make setup         create .venv.nosync (Python 3.11) and install everything"
@@ -56,6 +56,11 @@ help:
 	@echo "make check-workflow   train, export and resume both algorithms for real (about 20s)"
 	@echo "make check-jobs       check the Slurm jobs start clean runs of real configs"
 	@echo "make check-pbs        check the CHPC Lengau PBS scripts honour the cluster contract"
+	@echo "make check-physics    check SIM_INTEGRATOR / SIM_TIMESTEP reach the MuJoCo model (CHANGES.md)"
+	@echo "make check-fast-trial check the fast trial loop matches the original bit for bit (CHANGES.md)"
+	@echo "make check-native-trial  check the C++ trial loop matches the Python one bit for bit"
+	@echo "make check-bench      check the benchmark tools in bench/"
+	@echo "make build-native     build the C++ trial loop (needs g++; optional, about 1.25x faster)"
 	@echo "make train         CONFIG=config/<body>.py [MAIN=src/ea/main.py] OUTPUT=output/<run>"
 	@echo "make test          SNAPSHOT=output/<run>/gen<N>.pkl   (watch a saved robot)"
 	@echo "make export        OUTPUT=output/<run>                (gen*.pkl -> generations.csv)"
@@ -70,7 +75,7 @@ setup-conda:
 	conda run -p $(CONDA_ENV) --no-capture-output python -m pip install -c constraints.txt -r requirements.txt
 	conda run -p $(CONDA_ENV) --no-capture-output python -m pip install --no-deps $(addprefix -e ,$(ENGINE_PACKAGES))
 
-check: verify check-bodies check-brain check-genotype check-evaluator check-head check-configs check-ea check-cmaes check-run check-workflow check-jobs check-pbs
+check: verify check-bodies check-brain check-genotype check-evaluator check-head check-configs check-ea check-cmaes check-run check-workflow check-jobs check-pbs check-physics check-fast-trial check-native-trial check-bench
 
 verify:
 	$(RUN_PYTHON) tests/test_environment.py
@@ -110,6 +115,21 @@ check-jobs:
 
 check-pbs:
 	$(RUN_PYTHON) tests/test_pbs.py
+
+check-physics:
+	$(RUN_PYTHON) tests/test_physics.py
+
+check-fast-trial:
+	$(RUN_PYTHON) tests/test_fast_trial.py
+
+check-native-trial:
+	$(RUN_PYTHON) tests/test_native_trial.py
+
+check-bench:
+	$(RUN_PYTHON) tests/test_bench.py
+
+build-native:
+	$(RUN_PYTHON) src/native/build_native.py
 
 MAIN ?= src/ea/main.py
 

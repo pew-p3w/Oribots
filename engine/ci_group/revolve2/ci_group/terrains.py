@@ -4,7 +4,6 @@ import math
 
 import numpy as np
 import numpy.typing as npt
-from noise import pnoise2
 from pyrr import Vector3
 
 from revolve2.modular_robot_simulation import Terrain
@@ -108,6 +107,11 @@ def rugged_heightmap(
     :param density: How coarse the ruggedness is.
     :returns: The created heightmap as a 2 dimensional array.
     """
+    # Imported here, not at module level: `noise` has no Windows wheel and needs
+    # a C compiler, and only this rugged heightmap uses it (every shipped config
+    # uses the flat terrain). See engine/PATCHES.md.
+    from noise import pnoise2
+
     OCTAVE = 10
     C1 = 4.0  # arbitrary constant to get nice noise
 

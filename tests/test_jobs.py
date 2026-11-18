@@ -11,6 +11,7 @@ Run with `make check-jobs`, or `python tests/test_jobs.py`.
 
 import importlib.util
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -129,9 +130,12 @@ def check_job(path: Path, run, canonical: str) -> list[str]:
     stem = path.stem
     text = path.read_text(encoding="utf-8")
 
-    parsed = subprocess.run(["bash", "-n", str(path)], capture_output=True, text=True)
-    if parsed.returncode != 0:
-        problems.append(f"{path.name}: bash -n failed: {parsed.stderr.strip()}")
+    # The syntax check needs a working bash, which a Windows machine may not
+    # have. The cluster and the Linux/macOS gates always do, so it runs there.
+    if _bash_works():
+        parsed = subprocess.run(["bash", "-n", str(path)], capture_output=True, text=True)
+        if parsed.returncode != 0:
+            problems.append(f"{path.name}: bash -n failed: {parsed.stderr.strip()}")
 
     if sbatch_option(text, "job-name") != stem:
         problems.append(f"{path.name}: --job-name is not {stem}")
@@ -182,6 +186,33 @@ def check_job(path: Path, run, canonical: str) -> list[str]:
     return problems
 
 
+_BASH_WORKS: bool | None = None
+
+
+def _bash_works() -> bool:
+    """
+    Whether a usable bash is on PATH.
+
+    On Windows, `bash.exe` can be the WSL launcher, which is present but fails
+    when WSL is not installed, so being on PATH is not enough: run it once.
+
+    :returns: True if `bash -c true` succeeds.
+    """
+    global _BASH_WORKS
+    if _BASH_WORKS is None:
+        if shutil.which("bash") is None:
+            _BASH_WORKS = False
+        else:
+            try:
+                _BASH_WORKS = (
+                    subprocess.run(["bash", "-c", "true"], capture_output=True, timeout=30).returncode
+                    == 0
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                _BASH_WORKS = False
+    return _BASH_WORKS
+
+
 def check_log_folder() -> list[str]:
     """
     Check that jobs/logs/ exists in a fresh clone.
@@ -194,6 +225,10 @@ def check_log_folder() -> list[str]:
     keep = JOBS_DIR / "logs" / ".gitkeep"
     if not keep.is_file():
         return ["jobs/logs/.gitkeep is missing, so a fresh clone has no log folder"]
+    # Needs git and a git checkout; skipped otherwise (for example a copied
+    # folder on a machine without git).
+    if shutil.which("git") is None or not (paths.ROOT / ".git").exists():
+        return []
     ignored = subprocess.run(
         ["git", "check-ignore", "-q", str(keep)], cwd=paths.ROOT, capture_output=True
     )
